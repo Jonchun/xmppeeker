@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/spf13/afero"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -28,8 +27,6 @@ const (
 	ExitFatal
 )
 
-var appFS = afero.NewOsFs()
-
 func handleConnection(logger *zap.SugaredLogger, c net.Conn, config *ProxyConfig) {
 	p := NewProxy(c, config)
 	err := p.Run()
@@ -49,6 +46,41 @@ func main() {
 	sugar := logger.Sugar()
 	defer logger.Sync()
 
+	configureViper(sugar)
+	pConfig := createProxyConfig(sugar)
+
+	listenAddr := fmt.Sprintf("%s:%s", viper.GetString("ListenHost"), viper.GetString("ListenPort"))
+	listener, err := net.Listen("tcp4", listenAddr)
+	if err != nil {
+		sugar.Errorw("failed to start listener",
+			"reason", err.Error(),
+		)
+		os.Exit(ExitFatal)
+	}
+	defer listener.Close()
+
+	sugar.Infow("xmppeeker started",
+		"ListenHost", viper.GetString("ListenHost"),
+		"ListenPort", viper.GetString("ListenPort"),
+		"BackendHost", viper.GetString("BackendHost"),
+		"BackendPort", viper.GetString("BackendPort"),
+	)
+
+	// Main loop
+	for {
+		c, err := listener.Accept()
+		if err != nil {
+			sugar.Errorw("error accepting connection",
+				"reason", err.Error(),
+			)
+			return
+		}
+		// TODO: Limit the number of goroutines spawned instead of infinitely creating them.
+		go handleConnection(sugar, c, pConfig)
+	}
+}
+
+func configureViper(sugar *zap.SugaredLogger) {
 	viper.SetConfigName("xmppeeker")
 	viper.SetConfigType("toml")
 	viper.AddConfigPath(filepath.Join(AppRoot, "conf"))
@@ -85,6 +117,18 @@ func main() {
 		os.Exit(ExitBadConfig)
 	}
 
+	logPath := viper.GetString("LogPath")
+	if !filepath.IsAbs(logPath) {
+		logPath, err = filepath.Abs(filepath.Join(AppRoot, viper.GetString("LogPath")))
+		if err != nil {
+			sugar.Warnw("bad log path",
+				"reason", err.Error(),
+			)
+			os.Exit(ExitBadConfig)
+		}
+		viper.Set("LogPath", logPath)
+	}
+
 	certPath := viper.GetString("Certificate")
 	if !filepath.IsAbs(certPath) {
 		certPath, err = filepath.Abs(filepath.Join(AppRoot, viper.GetString("Certificate")))
@@ -93,6 +137,7 @@ func main() {
 				"reason", err.Error(),
 			)
 		}
+		viper.Set("Certificate", certPath)
 	}
 	keyPath := viper.GetString("CertificateKey")
 	if !filepath.IsAbs(keyPath) {
@@ -102,17 +147,20 @@ func main() {
 				"reason", err.Error(),
 			)
 		}
+		viper.Set("CertificateKey", keyPath)
 	}
+}
 
-	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
+func createProxyConfig(sugar *zap.SugaredLogger) *ProxyConfig {
+	cert, err := tls.LoadX509KeyPair(viper.GetString("Certificate"), viper.GetString("CertificateKey"))
 	if err != nil {
 		sugar.Warnw("failed to load x509 key pair",
 			"reason", err.Error(),
-			"certificate", certPath,
-			"key", keyPath,
+			"certificate", viper.GetString("Certificate"),
+			"key", viper.GetString("CertificateKey"),
 		)
 
-		if err := appFS.MkdirAll(filepath.Join(AppRoot, DefaultCertificatePath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Join(AppRoot, DefaultCertificatePath), 0755); err != nil {
 			sugar.Errorw("failed to certs directory",
 				"reason", err.Error(),
 			)
@@ -126,52 +174,14 @@ func main() {
 		}
 	}
 
-	logPath := viper.GetString("LogPath")
-	if !filepath.IsAbs(logPath) {
-		logPath, err = filepath.Abs(filepath.Join(AppRoot, viper.GetString("LogPath")))
-		if err != nil {
-			sugar.Warnw("bad log path",
-				"reason", err.Error(),
-			)
-		}
-	}
-
 	pConfig := &ProxyConfig{
 		Address:        fmt.Sprintf("%s:%s", viper.GetString("BackendHost"), viper.GetString("BackendPort")),
 		Domain:         viper.GetString("BackendHost"),
 		ConnectTimeout: viper.GetInt("ConnectTimeout"),
-		LogPath:        logPath,
-		LogTimeFormat:  "2006-01-02 15:04:05.000000",
-		FileTimeFormat: "2006-01-02_15-04-05",
+		LogPath:        viper.GetString("LogPath"),
+		LogTimeFormat:  viper.GetString("LogTimeFormat"),
+		FileTimeFormat: viper.GetString("FileTimeFormat"),
 		TLSConfig:      &tls.Config{Certificates: []tls.Certificate{cert}},
 	}
-
-	listenAddr := fmt.Sprintf("%s:%s", viper.GetString("ListenHost"), viper.GetString("ListenPort"))
-	listener, err := net.Listen("tcp4", listenAddr)
-	if err != nil {
-		sugar.Errorw("failed to start listener",
-			"reason", err.Error(),
-		)
-		os.Exit(ExitFatal)
-	}
-	defer listener.Close()
-
-	// Main loop
-	sugar.Infow("xmppeeker started",
-		"ListenHost", viper.GetString("ListenHost"),
-		"ListenPort", viper.GetString("ListenPort"),
-		"BackendHost", viper.GetString("BackendHost"),
-		"BackendPort", viper.GetString("BackendPort"),
-	)
-	for {
-		c, err := listener.Accept()
-		if err != nil {
-			sugar.Errorw("error accepting connection",
-				"reason", err.Error(),
-			)
-			return
-		}
-		// TODO: Limit the number of goroutines spawned instead of infinitely creating them.
-		go handleConnection(sugar, c, pConfig)
-	}
+	return pConfig
 }

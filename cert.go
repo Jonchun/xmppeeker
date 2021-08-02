@@ -94,7 +94,7 @@ func generateAndSaveSelfSignedCert(logger *zap.SugaredLogger) (cert tls.Certific
 	}
 
 	// Save autogen certs to disk
-	f, e := appFS.OpenFile(filepath.Join(AppRoot, DefaultCertificatePath, DefaultCertificate), os.O_RDWR|os.O_CREATE, 0755)
+	f, e := os.OpenFile(filepath.Join(AppRoot, DefaultCertificatePath, DefaultCertificate), os.O_RDWR|os.O_CREATE, 0755)
 	if e != nil {
 		logger.Errorw("failed to open certificate file",
 			"reason", err.Error(),
@@ -110,7 +110,7 @@ func generateAndSaveSelfSignedCert(logger *zap.SugaredLogger) (cert tls.Certific
 			)
 		}
 	}
-	f, err = appFS.OpenFile(filepath.Join(AppRoot, DefaultCertificatePath, DefaultCertificateKey), os.O_RDWR|os.O_CREATE, 0755)
+	f, err = os.OpenFile(filepath.Join(AppRoot, DefaultCertificatePath, DefaultCertificateKey), os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		logger.Errorw("failed to open key file",
 			"reason", err.Error(),

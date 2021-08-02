@@ -112,7 +112,7 @@ func (p *Proxy) SetClientConn(conn net.Conn) error {
 
 	logFile := fmt.Sprintf("%s.C2P.log", p.logName)
 	// If the file doesn't exist, create it, or append to the file
-	f, err := appFS.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("error opening log file %s: %s", logFile, err)
 	}
@@ -136,7 +136,7 @@ func (p *Proxy) SetServerConn(conn net.Conn) error {
 
 	logFile := fmt.Sprintf("%s.P2S.log", p.logName)
 	// If the file doesn't exist, create it, or append to the file
-	f, err := appFS.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("error opening log file %s: %s", logFile, err)
 	}
@@ -266,7 +266,7 @@ func (p *Proxy) setLogName(clientConn net.Conn) error {
 	pAddr := prettifyAddress(clientConn.RemoteAddr())
 	p.logName = filepath.Join(p.Config.LogPath, pAddr)
 
-	if err := appFS.MkdirAll(p.logName, 0755); err != nil {
+	if err := os.MkdirAll(p.logName, 0755); err != nil {
 		return err
 	}
 
