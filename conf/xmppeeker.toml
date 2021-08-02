@@ -1,0 +1,14 @@
+# This is the backend server XMPPeeker is acting as a reverse proxy for
+BackendHost = ""
+BackendPort = 5222
+
+# General Settings
+# Time Format strings are used with golang's Time.Format: https://pkg.go.dev/time#Time.Format
+ListenHost = "0.0.0.0"                       # Address that XMPPeeker listens on
+ListenPort = 5222                            # Port that XMPPeeker listens on
+ConnectTimeout = 10                          # How long to wait before timing out connection to backend
+Certificate = "certs/xmppeeker.crt"          # The x509 certificate served by the proxy. This can include the full chain.
+CertificateKey = "certs/xmppeeker.key"       # matching key for certificate
+LogTimeFormat = "2006-01-02 15:04:05.000000" # Time Format string used for timestamps when logging the XMPP stream to disk
+FileTimeFormat = "2006-01-02_15-04-05"       # Time Format string used for the name of the log file
+LogPath = "logs"                             # This is the directory where proxied XMPP sessions will get logged
